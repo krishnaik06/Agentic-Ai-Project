@@ -1,79 +1,88 @@
-from langgraph.graph import StateGraph, START,END, MessagesState
-from langgraph.prebuilt import tools_condition,ToolNode
-from langchain_core.prompts import ChatPromptTemplate
+from langgraph.graph import StateGraph, START, END
+from langchain_core.messages import AIMessage
 from src.langgraphagenticai.state.state import State
-from src.langgraphagenticai.nodes.basic_chatbot_node import BasicChatbotNode
-from src.langgraphagenticai.nodes.chatbot_with_Tool_node import ChatbotWithToolNode
-from src.langgraphagenticai.tools.serach_tool import get_tools,create_tool_node
-
-
-
+from src.langgraphagenticai.nodes.software_lifecycle_nodes import (
+    RequirementsNode,
+    UserStoriesNode,
+    ApprovalNode,
+    DesignDocumentsNode,
+    CodeGenerationNode,
+    CodeReviewNode,
+    SecurityReviewNode,
+    TestCasesNode,
+    QATestingNode,
+    DeploymentNode,
+    MonitoringFeedbackNode,
+    MaintenanceUpdatesNode
+)
 
 class GraphBuilder:
+    def __init__(self, model):
+        self.llm = model
+        self.graph_builder = StateGraph(State)
 
-    def __init__(self,model):
-        self.llm=model
-        self.graph_builder=StateGraph(State)
-
-    def basic_chatbot_build_graph(self):
+    def software_lifecycle_build_graph(self):
         """
-        Builds a basic chatbot graph using LangGraph.
-        This method initializes a chatbot node using the `BasicChatbotNode` class 
-        and integrates it into the graph. The chatbot node is set as both the 
-        entry and exit point of the graph.
+        Builds the Software Development Lifecycle graph with appropriate approval checkpoints.
         """
-        self.basic_chatbot_node=BasicChatbotNode(self.llm)
-        self.graph_builder.add_node("chatbot",self.basic_chatbot_node.process)
-        self.graph_builder.add_edge(START,"chatbot")
-        self.graph_builder.add_edge("chatbot",END)
+        # Instantiate the lifecycle nodes
+        req_node = RequirementsNode(self.llm)
+        user_stories_node = UserStoriesNode(self.llm)
+        approval_node = ApprovalNode(self.llm)
+        design_docs_node = DesignDocumentsNode(self.llm)
+        code_gen_node = CodeGenerationNode(self.llm)
+        code_review_node = CodeReviewNode(self.llm)
+        security_review_node = SecurityReviewNode(self.llm)
+        test_cases_node = TestCasesNode(self.llm)
+        qa_testing_node = QATestingNode(self.llm)
+        deployment_node = DeploymentNode(self.llm)
+        monitoring_node = MonitoringFeedbackNode(self.llm)
+        maintenance_node = MaintenanceUpdatesNode(self.llm)
 
+        # Add nodes using unique IDs (avoiding conflict with state keys)
+        self.graph_builder.add_node("initialize_state", self._initialize_state)
+        self.graph_builder.add_node("requirements_node", req_node.process)
+        self.graph_builder.add_node("user_stories_node", user_stories_node.process)
+        self.graph_builder.add_node("approval_node", approval_node.process)
+        self.graph_builder.add_node("design_documents_node", design_docs_node.process)
+        self.graph_builder.add_node("code_generation_node", code_gen_node.process)
+        self.graph_builder.add_node("code_review_node", code_review_node.process)
+        self.graph_builder.add_node("security_review_node", security_review_node.process)
+        self.graph_builder.add_node("test_cases_node", test_cases_node.process)
+        self.graph_builder.add_node("qa_testing_node", qa_testing_node.process)
+        self.graph_builder.add_node("deployment_node", deployment_node.process)
+        self.graph_builder.add_node("monitoring_feedback_node", monitoring_node.process)
+        self.graph_builder.add_node("maintenance_updates_node", maintenance_node.process)
 
-    def chatbot_with_tools_build_graph(self):
-        """
-        Builds an advanced chatbot graph with tool integration.
-        This method creates a chatbot graph that includes both a chatbot node 
-        and a tool node. It defines tools, initializes the chatbot with tool 
-        capabilities, and sets up conditional and direct edges between nodes. 
-        The chatbot node is set as the entry point.
-        """
-        ## Define the tool and tool node
-
-        tools=get_tools()
-        tool_node=create_tool_node(tools)
-
-        ##Define LLM
-        llm = self.llm
-
-        # Define chatbot node
-        obj_chatbot_with_node = ChatbotWithToolNode(llm)
-        chatbot_node = obj_chatbot_with_node.create_chatbot(tools)
-
-        # Add nodes
-        self.graph_builder.add_node("chatbot", chatbot_node)
-        self.graph_builder.add_node("tools", tool_node)
-
-        # Define conditional and direct edges
-        self.graph_builder.add_edge(START,"chatbot")
-        self.graph_builder.add_conditional_edges("chatbot", tools_condition)
-        self.graph_builder.add_edge("tools","chatbot")
-
+        # Define the workflow edges using the unique node IDs
+        self.graph_builder.add_edge(START, "initialize_state")
+        self.graph_builder.add_edge("initialize_state", "requirements_node")
+        self.graph_builder.add_edge("requirements_node", "user_stories_node")
+        self.graph_builder.add_edge("user_stories_node", "approval_node")
+        self.graph_builder.add_edge("approval_node", "design_documents_node")
+        self.graph_builder.add_edge("design_documents_node", "code_generation_node")
+        self.graph_builder.add_edge("code_generation_node", "code_review_node")
+        self.graph_builder.add_edge("code_review_node", "security_review_node")
+        self.graph_builder.add_edge("security_review_node", "test_cases_node")
+        self.graph_builder.add_edge("test_cases_node", "qa_testing_node")
+        self.graph_builder.add_edge("qa_testing_node", "deployment_node")
+        self.graph_builder.add_edge("deployment_node", "monitoring_feedback_node")
+        self.graph_builder.add_edge("monitoring_feedback_node", "maintenance_updates_node")
+        self.graph_builder.add_edge("maintenance_updates_node", END)
     
-    
-    
+    def _initialize_state(self, state: State) -> dict:
+        """Initialize the state with required keys to prevent 'history' errors."""
+        if "history" not in state:
+            state["history"] = []
+        return state
+
     def setup_graph(self, usecase: str):
         """
         Sets up the graph for the selected use case.
         """
-        if usecase == "Basic Chatbot":
-            self.basic_chatbot_build_graph()
+        if usecase == "Software Lifecycle":
+            self.software_lifecycle_build_graph()
+        else:
+            raise ValueError(f"Unsupported use case: {usecase}")
 
-        if usecase == "Chatbot with Tool":
-            self.chatbot_with_tools_build_graph()
         return self.graph_builder.compile()
-    
-
-
-
-
-    
-
